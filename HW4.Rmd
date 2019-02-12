@@ -1,0 +1,147 @@
+---
+title: "HW4"
+author: "Joon"
+date: "April 12, 2018"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+##Q1
+
+defining the equation for variance
+The expected value equation simply came out to Pa
+```{r variance}
+variance <- function(n,p) {
+ret <- (1/n) * (p*(1-p))
+
+return(ret)
+  
+}
+
+```
+
+
+##1B
+Finding the variance 
+e(x) = .5
+```{r 1B}
+variance(50,.5)
+
+```
+
+##1C
+```{r q1 }
+ pnorm(0.6,mean =0.5,sd = sqrt(.005), lower.tail = FALSE)
+        
+
+```
+
+##1D
+We accept the null hypothesis as the probability is greater than our threshold 
+
+##1E
+We reject the null hypothesis as the probability is less than our threshold
+```{r 1E}
+
+v2 <- variance(100,.5)
+
+1 - pnorm(.6,.5,sqrt(v2))
+```
+
+##1F the smallest value 
+```{r 1f}
+qb<-qnorm(.05,mean=.5,sd=.05,lower.tail = FALSE)
+qb
+```
+
+##1G
+Outputs the samllest detectable improvement 
+```{r 1G}
+qb - .5
+```
+
+##Q2
+
+##2a)
+expected value is .75 according to the derived mean formula
+we calculate the variance using the defined formula with n = 50 and p = .75
+```{r q2 a}
+q2v1 <- variance(50,.75)
+q2v1
+
+```
+
+##2B)
+
+```{r q2b}
+pnorm(0.6,mean =0.75,sd = sqrt(q2v1),lower.tail = FALSE)
+```
+##2C)
+We fail to reject the null hypothesis as our result is way above the threshold. It makes sense as the probability the pa click rate is higher than our new click rate is almost guaranteed
+
+##2D)
+we reject the null hypothesis in this case as increasing the sample size causes our result to be less than our threshold
+```{r Q2d}
+q2v2 <- variance(100,.75)
+
+1 - pnorm(.6,.5,sqrt(q2v2))
+
+```
+##2E) smallest pb value
+```{r q2E}
+qb2<-qnorm(.05,mean=.75,sd=q2v2,lower.tail = FALSE) 
+
+qb2
+```
+
+##2F)
+```{r 2F}
+qb2-.75
+```
+
+##3
+The samllest detectable improvement for question 1 is larger as 
+0.08224268 >  0.003084101
+
+This makes sense as both the standard deviation and variance for q1 are larger than those of q2 thus improvements would also be larger in magnitude.
+
+
+
+##4
+
+##Q4B)
+since the expected value of a bernoulli variable is p the p in our case would be 
+the mean of a and b so 35+35/55+45 = 70/100 = .7
+
+##Q4C)
+my derived formula ends up being 1/nb - 1/na so it would be 1/45 -1/55
+```{r q4c}
+1/45 - 1/55
+```
+
+##Q4D)
+estimate I derived from estimating pb and pa and then subtracting them.
+pa = mean of a 
+pb = mean of b
+```{r q4}
+est <- 35/45 - 35/55
+
+est
+
+```
+
+##Q4E
+```{r Q4E}
+pnorm(est,mean =0,sd = sqrt(.004),lower.tail = FALSE)
+
+```
+
+## Q4 F 
+
+Yes we can reject the null hypothesis as our click rate did increase. In that sense it is almost intuitive that we can reject the null hypothesis
+

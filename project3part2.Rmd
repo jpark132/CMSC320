@@ -1,0 +1,270 @@
+---
+title: "PRoj3 part2"
+author: "Joon"
+date: "May 4, 2018"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+####### PART 2 CLASSIFICATION ########
+
+This code just prepares the data as shown in the project description.
+Feel free to ignore this part as its just the copied code
+```{r preparing data}
+library(tidyverse)
+library(lubridate)
+theme_set(theme_bw())
+
+csv_file <- "Affordability_Wide_2017Q4_Public.csv"
+tidy_afford <- read_csv(csv_file) %>%
+  filter(Index == "Mortgage Affordability") %>%
+  drop_na() %>%
+  filter(RegionID != 0, RegionName != "United States") %>%
+  dplyr::select(RegionID, RegionName, matches("^[1|2]")) %>%
+  gather(time, affordability, matches("^[1|2]")) %>%
+  type_convert(col_types=cols(time=col_date(format="%Y-%m")))
+tidy_afford
+```
+### More preparation of data
+Same thing, preparation of data copied from the project description
+```{r more preparation of data}
+outcome_df <- tidy_afford %>%
+  mutate(yq = quarter(time, with_year=TRUE)) %>%
+  filter(yq %in% c("2016.4", "2017.4")) %>%
+  select(RegionID, RegionName, yq, affordability) %>%
+  spread(yq, affordability) %>%
+  mutate(diff = `2017.4` - `2016.4`) %>%
+  mutate(Direction = ifelse(diff>0, "up", "down")) %>%
+  select(RegionID, RegionName, Direction)
+outcome_df
+```
+
+###DISCUSSION OF INITIAL THOUGHTS
+
+I chose to compare two random forest classifiers based on data for the entire time series vs the time series for the last few years (2011-2016). So I first split up the original data into 2 data frames where df1 is predicting the data over all the time (1980-2016) vs df2 which uses data from the past five years (2011-2016).
+MY initial assumption going into this is that the smaller dataset is a bit more accurate as it will reflect more recent market changes and will thus better predict affordability.
+```{r predictor df}
+predictor_df1 <- tidy_afford %>%
+  filter(year(time) <= 2016)
+
+predictor_df2 <- tidy_afford %>%
+  filter(year(time) <=2016 & year(time)  >= 2011)
+
+```
+### COde for the models
+
+
+```{r widen}
+wide_df1 <- predictor_df1 %>%
+  select(RegionID,time,affordability) %>%
+  tidyr::spread(time,affordability)
+
+wide_df2 <- predictor_df2 %>%
+  select(RegionID,time,affordability) %>%
+  tidyr::spread(time,affordability)
+```
+I am now widening the data to prepare it so I can turn it into  quarterly differences
+
+```{r Quarterly Diff}
+matrix_1 <- wide_df1 %>%
+  select(-RegionID) %>%
+  as.matrix() %>%
+  .[,-1]
+
+matrix_2 <- wide_df1 %>%
+  select(-RegionID) %>%
+  as.matrix() %>%
+  .[,-ncol(.)]
+
+matrix_3 <- wide_df2 %>%
+  select(-RegionID) %>%
+  as.matrix() %>%
+  .[,-1]
+
+matrix_4 <- wide_df2 %>%
+  select(-RegionID) %>%
+  as.matrix() %>%
+  .[,-ncol(.)]
+
+diff_df1 <- (matrix_1 - matrix_2) %>%
+  magrittr::set_colnames(NULL) %>%
+  as_data_frame() %>%
+  mutate(RegionID = wide_df1$RegionID)
+
+diff_df2 <- (matrix_3 - matrix_4) %>%
+  magrittr::set_colnames(NULL) %>%
+  as_data_frame() %>%
+  mutate(RegionID = wide_df2$RegionID)
+
+
+```
+
+I join the two dataframes and label them either up or down based on the 
+quarterly differences
+
+```{r joining for final conversion}
+
+final_df1 <- diff_df1 %>%
+  inner_join(outcome_df %>% select(RegionID, Direction), by="RegionID") %>%
+  mutate(Direction=factor(Direction, levels=c("down", "up")))
+
+final_df2 <- diff_df2 %>%
+  inner_join(outcome_df %>% select(RegionID, Direction), by="RegionID") %>%
+  mutate(Direction=factor(Direction, levels=c("down", "up")))
+```
+
+Code preparing the data for training using two random forests
+```{r Training}
+set.seed(5555)
+
+test_rf_df1 <- final_df1 %>%
+  group_by(Direction) %>%
+  sample_frac(.2) %>%
+  ungroup()
+
+test_rf_df2 <- final_df2 %>%
+  group_by(Direction) %>%
+  sample_frac(.2) %>%
+  ungroup()
+
+train_rf_df1 <- final_df1 %>%
+  anti_join(test_rf_df1,by="RegionID")
+
+train_rf_df2 <- final_df2 %>%
+  anti_join(test_rf_df2,by="RegionID")
+
+```
+
+I used random forests to classify my data 
+```{r randomforest}
+library(randomForest)
+
+rf1 <- randomForest(Direction~., data=train_rf_df1 %>% select(-RegionID))
+
+rf2 <- randomForest(Direction~., data=train_rf_df2 %>% select(-RegionID))
+
+rf1
+
+rf2
+```
+
+Using random forests to predict data
+
+```{r prediction}
+library(randomForest)
+rf1_predictions <- predict(rf1, newdata=test_rf_df1 %>% select(-RegionID))
+
+rf2_predictions <- predict(rf2, newdata=test_rf_df2 %>% select(-RegionID))
+
+table(pred=rf1_predictions, observed=test_rf_df1$Direction)
+
+table(pred=rf2_predictions, observed=test_rf_df2$Direction)
+
+
+
+```
+The data suggests that the error percentage for the larger dataset is 25%
+while the error percentage for the more recent dataset (2011-2016) is around 43.75%
+By there percentages we are given an initial assumption that the more recent dataset
+is less useful at classifying.
+
+
+###Cross validation part of the project.
+I did two cross validations, one for
+the data including the entire time series and one including data from just 
+the past 5 years
+
+```{r cross validation}
+library(caret)
+library(sqldf)
+
+result_df1 <- createFolds(final_df1$Direction,k=10) %>%
+  purrr::imap(function(test_indices,fold_number){
+    train_cross_df1 <- final_df1 %>%
+      select(-RegionID) %>%
+      slice(-test_indices)
+    
+    test_cross_df1 <- final_df1 %>%
+      select(-RegionID) %>%
+      slice(test_indices)
+    
+    rf1_cross <- randomForest(Direction~., data=train_cross_df1)
+    
+    test_cross_df1 %>%
+      select(observed_label = Direction) %>%
+      mutate(fold = fold_number) %>%
+      mutate(prob_positive_rf1 = predict(rf1_cross, newdata = test_cross_df1,type ="prob")[,"up"]) %>%
+      mutate(predicted_label_rf1 = ifelse(prob_positive_rf1 > 0.5, "up", "down")) 
+  }) %>%
+  purrr::reduce(bind_rows)
+
+result_df2 <- createFolds(final_df2$Direction,k=10) %>%
+  purrr::imap(function(test_indices,fold_number){
+    train_cross_df2 <- final_df2 %>%
+      select(-RegionID) %>%
+      slice(-test_indices)
+    
+    test_cross_df2 <- final_df2 %>%
+      select(-RegionID) %>%
+      slice(test_indices)
+    
+    rf2_cross <- randomForest(Direction~., data=train_cross_df2)
+    
+    test_cross_df2 %>%
+      select(observed_label = Direction) %>%
+      mutate(fold = fold_number) %>%
+      mutate(prob_positive_rf2 = predict(rf2_cross, newdata = test_cross_df2,type ="prob")[,"up"]) %>%
+      mutate(predicted_label_rf2 = ifelse(prob_positive_rf2 > 0.5, "up", "down")) 
+  }) %>%
+  purrr::reduce(bind_rows)
+
+result_df1
+result_df2
+
+
+
+```
+COmputing the auroc curve based on the two dataframes
+```{r auroc}
+library(ROCR)
+labels_df1 <- split(result_df1$observed_label, result_df1$fold)
+
+predictions_rf1 <- split(result_df1$prob_positive_rf1, result_df1$fold) %>% prediction(labels_df1)
+
+labels_df2 <- split(result_df2$observed_label, result_df2$fold)
+
+predictions_rf2 <- split(result_df2$prob_positive_rf2, result_df2$fold) %>% prediction(labels_df2)
+
+# compute average AUC for the first RF
+mean_auc_rf1 <- predictions_rf1 %>%
+  performance(measure="auc") %>%
+  # I know, this line is ugly, but that's how it is
+  slot("y.values") %>% unlist() %>% 
+  mean()
+
+# compute average AUC for the second RF
+mean_auc_rf2 <- predictions_rf2 %>%
+  performance(measure="auc") %>%
+  slot("y.values") %>% unlist() %>% 
+  mean()
+
+# plot the ROC curve for the first RF
+predictions_rf1 %>%
+  performance(measure="tpr", x.measure="fpr") %>%
+  plot(avg="threshold", col="orange", lwd=2)
+
+# plot the ROC curve for the second RF
+predictions_rf2 %>%
+  performance(measure="tpr", x.measure="fpr") %>%
+  plot(avg="threshold", col="blue", lwd=2, add=TRUE)
+
+legend("bottomright",
+       legend=paste(c("1980-2016", "2011-2016"), "rf, AUC:", round(c(mean_auc_rf1, mean_auc_rf2), digits=3)),
+       col=c("orange", "blue"))
+```
+
+####INTERPRETATION AND DISCUSSION
+overall it seems that the more recent dataset (2011-2016) is slightly more accurate. This is reflected in the auroc curve shown above as the closer the curve is to the lefthand corner, the more accurate it is. HOwever this is in contrast to the random forest classification done above in which the error rate was 25% for the larger dataset while the error rate of the more recent dataset was 43.75%. However our oerall AUROC curve which was based on the predictions made from our corss validation seem to hold true

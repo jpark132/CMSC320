@@ -1,0 +1,441 @@
+---
+title: "PROJ3"
+author: "Joon"
+date: "April 16, 2018"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r gapmidner}
+library(gapminder)
+data(gapminder)
+
+gapminder
+
+
+```
+## we were told that we should do one point per country 
+##Exercise 1
+```{r exercise_1}
+library(tidyr)
+library(ggplot2)
+gapminder %>% 
+    ggplot(aes(x=year,y=lifeExp))+ geom_point() 
+
+```
+##Question 1:
+It appears that the general trend behind this plot is 
+that the average life expectancy of the data is increasing
+
+##Question 2: 
+The life expectancy distribution per year is skewed for each year as the "violin"
+balloons out further on one end indicating a larger distribution on that end. For example years starting from 1950 to 1970 are larger at the bottom adn thus skewed towards that direction while years past that have a more top heavy distribution and thus are skewed more heavily towards the upper range.
+
+I would describe the data as unimodal as the violin plots peak around one value for each of the years which are reasonably assumed to be the mode of the life expectancy for that year.
+
+##Question 3:
+I would reject the null hypothesis as there does seem to be a definable trend between year and the increase in life expectancy
+
+##Question 4:
+The violin plot would have a positive relationship with years and residuals similar to the trend observed in life expectancy and year
+
+##Question 5:
+The violin plot Should be centered around 0 with variations between each violin plot.
+
+##Exercise 2
+```{r exercise 2}
+library(tidyr)
+library(ggplot2)
+
+d2<-lm(lifeExp ~ year,data = gapminder) 
+  broom::tidy(d2)
+```
+##QUestion 6:
+according to the linear model the life expectancy increases by .32 per year 
+
+##Question 7:
+Yes as there is a definable increase of life expectancy per year and thus a definable relationship between year and life expectancy 
+
+##Exercise 3
+```{r exercise 3}
+library(ggplot2)
+library(broom)
+library(tidyr)
+
+augmented_gapminder <- d2 %>% augment()
+
+augmented_gapminder %>%
+  ggplot(aes(x=factor(year),y=.resid)) + 
+  geom_violin() +
+  xlab("Year") +
+  ylab("residuals")
+  
+
+```
+
+##Question 8
+The plot matches my expectations set in q4. We can see that the mode of each violin plot is slowly increasing to a positive mode and by the end of 2007 most of the data values are above 0.
+```{r exercise 4}
+big_gapminder <- merge(gapminder,augmented_gapminder, by=c("lifeExp","year"))
+
+big_gapminder %>%
+  ggplot(aes(x=continent,y=.resid)) +
+  geom_boxplot() +
+  xlab("Continents") + 
+  ylab("residuals")
+```
+
+##Question 9
+There definitely seems to be a relationship between continent and life expectancy which suggests that life expectancy over time and the rate at which it is increasing depends on which continent you are observing.
+
+```{r exercise 5}
+gapminder %>%
+  ggplot(aes(x=year,y=lifeExp)) +
+  geom_point() +
+  geom_smooth(aes(color = continent),method=lm) 
+  
+```
+
+##Question 10 
+
+
+```{r exercise 6}
+d6<-lm(lifeExp ~ year*continent,data = gapminder) 
+  broom::tidy(d6)
+```
+##QUestion 11 
+Most of the variables are not significantly different from 0 for example year has a value of 1.953998e-62. Some variables that might be are the continent of Oceania, Europe and the year. Others include the interaction such as year.continentOceania,year.continentEurope that are significantly different from 0 compared to the other variables.
+
+##Question 12
+```{r question 12}
+d6[[1]][2]
+
+d6[[1]][7]
+
+averages <- c(d6[[1]][2],d6[[1]][2]+d6[[1]][7],d6[[1]][2]+d6[[1]][8],d6[[1]][2]+d6[[1]][9],d6[[1]][2]+d6[[1]][10])
+continents <- c('Africa','America','Asia','Europe','Oceania')
+
+estimates <- data.frame(continents,averages)
+
+estimates
+
+
+```
+We see from our dataframe that year is our default and so to find the average of all the other continents by adding them together 
+to access each variable i had to access the 2d array which is the reason for the odd syntax  d6[[1]][n] where n is the position 
+of the yearcontinent or year variable
+
+
+
+```{r exercise 7}
+nova2 <-anova(d2)
+nova6 <-anova(d6)
+nova2 
+nova6
+
+```
+##Question 13
+Comparing the two linear regression models we see that the model in exercise 6 which defines an interaction between continent and year 
+is a better model than just the year only model. We can infer this from the F values and the probability columns. The F stat of the continent-year 
+model are all over 1 which indicates a relationship between the two variables. This is also supported by the probabilities associated with the 
+f statistic using the f distribution. All the probability values for the f stats are close to 0 which indicates extremely strong evidence
+that there is an association with the specified interaction.
+This gives us a clearer picture than the year only model does as we have determined that coninent does in fact affect the life expectancy.
+
+```{r exercise 8 interaction plot}
+  aug_d6 <-d6 %>% augment()
+
+aug_d6 %>%
+  ggplot(aes(x=factor(year),y=.resid)) +
+  geom_violin() +
+  ggtitle("Plot Of Interaction Model ") +
+  xlab("years") +
+  ylab("residuals") 
+
+```
+```{r exercise 8 fitted values}
+ d2%>%ggplot(aes(x=factor(year),y=.resid)) +
+  geom_violin()+
+  ggtitle("year vs residuals") +
+  xlab("year") +
+  ylab("residuals")
+```
+Hector described the model for the fitted vs residuals to be "It’s the value predicted by the regression model for each observation in the dataset. ". SO I used the augmented gapminder df which was pretty much the df in exercise 2 just augmented.
+
+```{r exercise 8 fitted values2}
+
+
+ aug_d2 <- d2%>% augment()
+  
+aug_d2 %>% 
+  ggplot(aes(x=.fitted,y=.resid)) +
+  geom_point() +
+  ggtitle("Plot of fitted Values") +
+  xlab("fitted values") +
+  ylab("residuals")
+```
+####### PART 2 CLASSIFICATION ########
+
+This code just prepares the data as shown in the project description.
+Feel free to ignore this part as its just the copied code
+```{r preparing data}
+library(tidyverse)
+library(lubridate)
+theme_set(theme_bw())
+
+csv_file <- "Affordability_Wide_2017Q4_Public.csv"
+tidy_afford <- read_csv(csv_file) %>%
+  filter(Index == "Mortgage Affordability") %>%
+  drop_na() %>%
+  filter(RegionID != 0, RegionName != "United States") %>%
+  dplyr::select(RegionID, RegionName, matches("^[1|2]")) %>%
+  gather(time, affordability, matches("^[1|2]")) %>%
+  type_convert(col_types=cols(time=col_date(format="%Y-%m")))
+tidy_afford
+```
+### More preparation of data
+Same thing, preparation of data copied from the project description
+```{r more preparation of data}
+outcome_df <- tidy_afford %>%
+  mutate(yq = quarter(time, with_year=TRUE)) %>%
+  filter(yq %in% c("2016.4", "2017.4")) %>%
+  select(RegionID, RegionName, yq, affordability) %>%
+  spread(yq, affordability) %>%
+  mutate(diff = `2017.4` - `2016.4`) %>%
+  mutate(Direction = ifelse(diff>0, "up", "down")) %>%
+  select(RegionID, RegionName, Direction)
+outcome_df
+```
+
+###DISCUSSION OF INITIAL THOUGHTS
+
+I chose to compare two random forest classifiers based on data for the entire time series vs the time series for the last few years (2011-2016). So I first split up the original data into 2 data frames where df1 is predicting the data over all the time (1980-2016) vs df2 which uses data from the past five years (2011-2016).
+MY initial assumption going into this is that the smaller dataset is a bit more accurate as it will reflect more recent market changes and will thus better predict affordability.
+```{r predictor df}
+predictor_df1 <- tidy_afford %>%
+  filter(year(time) <= 2016)
+
+predictor_df2 <- tidy_afford %>%
+  filter(year(time) <=2016 & year(time)  >= 2011)
+
+```
+### COde for the models
+
+
+```{r widen}
+wide_df1 <- predictor_df1 %>%
+  select(RegionID,time,affordability) %>%
+  tidyr::spread(time,affordability)
+
+wide_df2 <- predictor_df2 %>%
+  select(RegionID,time,affordability) %>%
+  tidyr::spread(time,affordability)
+```
+I am now widening the data to prepare it so I can turn it into  quarterly differences
+
+```{r Quarterly Diff}
+matrix_1 <- wide_df1 %>%
+  select(-RegionID) %>%
+  as.matrix() %>%
+  .[,-1]
+
+matrix_2 <- wide_df1 %>%
+  select(-RegionID) %>%
+  as.matrix() %>%
+  .[,-ncol(.)]
+
+matrix_3 <- wide_df2 %>%
+  select(-RegionID) %>%
+  as.matrix() %>%
+  .[,-1]
+
+matrix_4 <- wide_df2 %>%
+  select(-RegionID) %>%
+  as.matrix() %>%
+  .[,-ncol(.)]
+
+diff_df1 <- (matrix_1 - matrix_2) %>%
+  magrittr::set_colnames(NULL) %>%
+  as_data_frame() %>%
+  mutate(RegionID = wide_df1$RegionID)
+
+diff_df2 <- (matrix_3 - matrix_4) %>%
+  magrittr::set_colnames(NULL) %>%
+  as_data_frame() %>%
+  mutate(RegionID = wide_df2$RegionID)
+
+
+```
+
+I join the two dataframes and label them either up or down based on the 
+quarterly differences
+
+```{r joining for final conversion}
+
+final_df1 <- diff_df1 %>%
+  inner_join(outcome_df %>% select(RegionID, Direction), by="RegionID") %>%
+  mutate(Direction=factor(Direction, levels=c("down", "up")))
+
+final_df2 <- diff_df2 %>%
+  inner_join(outcome_df %>% select(RegionID, Direction), by="RegionID") %>%
+  mutate(Direction=factor(Direction, levels=c("down", "up")))
+```
+
+Code preparing the data for training using two random forests
+```{r Training}
+set.seed(5555)
+
+test_rf_df1 <- final_df1 %>%
+  group_by(Direction) %>%
+  sample_frac(.2) %>%
+  ungroup()
+
+test_rf_df2 <- final_df2 %>%
+  group_by(Direction) %>%
+  sample_frac(.2) %>%
+  ungroup()
+
+train_rf_df1 <- final_df1 %>%
+  anti_join(test_rf_df1,by="RegionID")
+
+train_rf_df2 <- final_df2 %>%
+  anti_join(test_rf_df2,by="RegionID")
+
+```
+
+I used random forests to classify my data 
+```{r randomforest}
+library(randomForest)
+
+rf1 <- randomForest(Direction~., data=train_rf_df1 %>% select(-RegionID))
+
+rf2 <- randomForest(Direction~., data=train_rf_df2 %>% select(-RegionID))
+
+rf1
+
+rf2
+```
+
+Using random forests to predict data
+
+```{r prediction}
+library(randomForest)
+rf1_predictions <- predict(rf1, newdata=test_rf_df1 %>% select(-RegionID))
+
+rf2_predictions <- predict(rf2, newdata=test_rf_df2 %>% select(-RegionID))
+
+table(pred=rf1_predictions, observed=test_rf_df1$Direction)
+
+table(pred=rf2_predictions, observed=test_rf_df2$Direction)
+
+
+
+```
+The data suggests that the error percentage for the larger dataset is 25%
+while the error percentage for the more recent dataset (2011-2016) is around 43.75%
+By there percentages we are given an initial assumption that the more recent dataset
+is less useful at classifying.
+
+
+###Cross validation part of the project.
+I did two cross validations, one for
+the data including the entire time series and one including data from just 
+the past 5 years
+
+```{r cross validation}
+library(caret)
+library(sqldf)
+
+result_df1 <- createFolds(final_df1$Direction,k=10) %>%
+  purrr::imap(function(test_indices,fold_number){
+    train_cross_df1 <- final_df1 %>%
+      select(-RegionID) %>%
+      slice(-test_indices)
+    
+    test_cross_df1 <- final_df1 %>%
+      select(-RegionID) %>%
+      slice(test_indices)
+    
+    rf1_cross <- randomForest(Direction~., data=train_cross_df1)
+    
+    test_cross_df1 %>%
+      select(observed_label = Direction) %>%
+      mutate(fold = fold_number) %>%
+      mutate(prob_positive_rf1 = predict(rf1_cross, newdata = test_cross_df1,type ="prob")[,"up"]) %>%
+      mutate(predicted_label_rf1 = ifelse(prob_positive_rf1 > 0.5, "up", "down")) 
+  }) %>%
+  purrr::reduce(bind_rows)
+
+result_df2 <- createFolds(final_df2$Direction,k=10) %>%
+  purrr::imap(function(test_indices,fold_number){
+    train_cross_df2 <- final_df2 %>%
+      select(-RegionID) %>%
+      slice(-test_indices)
+    
+    test_cross_df2 <- final_df2 %>%
+      select(-RegionID) %>%
+      slice(test_indices)
+    
+    rf2_cross <- randomForest(Direction~., data=train_cross_df2)
+    
+    test_cross_df2 %>%
+      select(observed_label = Direction) %>%
+      mutate(fold = fold_number) %>%
+      mutate(prob_positive_rf2 = predict(rf2_cross, newdata = test_cross_df2,type ="prob")[,"up"]) %>%
+      mutate(predicted_label_rf2 = ifelse(prob_positive_rf2 > 0.5, "up", "down")) 
+  }) %>%
+  purrr::reduce(bind_rows)
+
+result_df1
+result_df2
+
+
+
+```
+COmputing the auroc curve based on the two dataframes
+```{r auroc}
+library(ROCR)
+labels_df1 <- split(result_df1$observed_label, result_df1$fold)
+
+predictions_rf1 <- split(result_df1$prob_positive_rf1, result_df1$fold) %>% prediction(labels_df1)
+
+labels_df2 <- split(result_df2$observed_label, result_df2$fold)
+
+predictions_rf2 <- split(result_df2$prob_positive_rf2, result_df2$fold) %>% prediction(labels_df2)
+
+# compute average AUC for the first RF
+mean_auc_rf1 <- predictions_rf1 %>%
+  performance(measure="auc") %>%
+  # I know, this line is ugly, but that's how it is
+  slot("y.values") %>% unlist() %>% 
+  mean()
+
+# compute average AUC for the second RF
+mean_auc_rf2 <- predictions_rf2 %>%
+  performance(measure="auc") %>%
+  slot("y.values") %>% unlist() %>% 
+  mean()
+
+# plot the ROC curve for the first RF
+predictions_rf1 %>%
+  performance(measure="tpr", x.measure="fpr") %>%
+  plot(avg="threshold", col="orange", lwd=2)
+
+# plot the ROC curve for the second RF
+predictions_rf2 %>%
+  performance(measure="tpr", x.measure="fpr") %>%
+  plot(avg="threshold", col="blue", lwd=2, add=TRUE)
+
+legend("bottomright",
+       legend=paste(c("1980-2016", "2011-2016"), "rf, AUC:", round(c(mean_auc_rf1, mean_auc_rf2), digits=3)),
+       col=c("orange", "blue"))
+```
+
+####INTERPRETATION AND DISCUSSION
+overall it seems that the more recent dataset (2011-2016) is slightly more accurate. This is reflected in the auroc curve shown above as the closer the curve is to the lefthand corner, the more accurate it is. HOwever this is in contrast to the random forest classification done above in which the error rate was 25% for the larger dataset while the error rate of the more recent dataset was 43.75%. However our oerall AUROC curve which was based on the predictions made from our corss validation seem to hold true
+

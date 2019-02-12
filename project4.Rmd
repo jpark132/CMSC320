@@ -1,0 +1,47 @@
+---
+title: "Project4"
+author: "Joon"
+date: "May 10, 2018"
+output:
+  html_document:
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+##Preparing Data
+```{r preparing data}
+library(tidyverse)
+library(stringr)
+
+arrest_tab <- read_csv("http://www.hcbravo.org/IntroDataSci/misc/BPD_Arrests.csv")
+dat <- arrest_tab %>% 
+  filter(!is.na(`Location 1`)) %>%
+  separate(`Location 1`, c("lat","lng"), sep=",") %>%
+  mutate(lat=as.numeric(str_replace(lat, "\\(", ""))) %>%
+  mutate(lng=as.numeric(str_replace(lng, "\\)", ""))) %>%
+  sample_n(2000)
+dat
+```
+###Creating a map
+```{r create map}
+library(leaflet)
+
+balto_map <- leaflet(dat) %>%
+  addCircleMarkers(lng = dat$lng, 
+                   lat = dat$lat, 
+                   radius = 7, 
+                   popup =   dat$incidentOffense,
+                   color = ~ ifelse(sex == 'F', 'red', 'blue'), 
+                   #label = as.character(dat$age), 
+                   stroke = FALSE,
+                   fillOpacity = .5)%>%
+                   #labelOptions = labelOptions(noHide = TRUE, textOnly = TRUE)) %>% 
+  addTiles() %>%
+  setView(lat=39.29, lng=-76.61, zoom=11) 
+  
+balto_map
+```
+My Map shows a circle marker for each conviction based on the Baltimore police data given. The code shows blue markers as males and red as females. Upon clicking the marker it will also display the offense that individual was convicted for. I am trying to show the distribution of sex, but I also thought it would be interesting to see the main reasons behind each conviction in relation to their sex.

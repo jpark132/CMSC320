@@ -1,0 +1,289 @@
+---
+title: "Project1"
+author: "Joon"
+date: "March 7, 2018"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## start of code
+
+
+```{r load_html}
+##scrapes the top 50 data using html methods
+
+  library(rvest)
+  library(magrittr)
+url <- "https://www.spaceweatherlive.com/en/solar-activity/top-50-solar-flares"
+
+space_data <- url %>%
+  read_html() %>% 
+  html_node(".table-striped") %>%
+  html_table() %>%
+  set_colnames(c("rank","flare_classification","date","flare_region","start_time","maximum_time","end_time","movie")) %>%
+  as.data.frame()
+
+
+space_data
+```
+
+```{r tidy_data}
+## scrapestidys the top 50 solar flare data
+  library(dplyr)
+  library(tidyr)
+  library(readr)
+
+##uniting the times to make datetimes for tidying it pipes each result with false so we can reuse the date and just remove with subset later
+
+tidy_space_data <- unite(space_data, start_datetime,c(date,start_time),sep = " ",remove = FALSE) %>% 
+              unite(maximum_datetime,c(date,maximum_time),sep = " ", remove = FALSE) %>%
+              unite(end_datetime,c(date,end_time),sep = " ") %>%
+              subset(select = -movie) 
+
+##converting to the right values using posixct
+              tidy_space_data$start_datetime<- as.POSIXct(tidy_space_data$start_datetime)
+              tidy_space_data$maximum_datetime <- as.POSIXct(tidy_space_data$maximum_datetime)
+              tidy_space_data$end_datetime <- as.POSIXct(tidy_space_data$end_datetime)
+
+tidy_space_data
+```
+```{r Scrape_flares}
+##scrapes and tidys the nasa table
+
+    library(rvest)
+    library(stringr)
+    library(readr)
+    library(tidyr)
+    library(dplyr)
+
+url <- "https://cdaw.gsfc.nasa.gov/CME_list/radio/waves_type2.html"
+
+whitespace <-"\\s+"
+solar_flare <- url %>%
+        read_html() %>%
+        html_node("pre") %>%
+        html_text() %>%
+  
+# splits with  a newline as that is what separates the rows
+  
+        str_split("\n",simplify = TRUE) %>%
+
+  ##finding all incomplete entries and setting to NA (based on the  website description)
+        
+        str_replace_all("\\?\\?\\?\\?","NA") %>%
+        str_replace_all("--/--","NA") %>%
+        str_replace_all("--:--","NA") %>%
+        str_replace_all("-----","NA") %>%
+        str_replace_all("----","NA") %>%
+        str_replace_all("SW90b","NA") %>%
+        str_replace_all("Back","NA") %>%
+        str_replace_all("BACK", "NA") %>%
+        str_replace_all("back\\?","NA") %>%
+        str_subset(".*PHTX") %>%
+        as_data_frame() %>%
+  
+  ##separating into new cols for tidy data separates using whitespace which == \\s+
+  
+        separate(value,
+                c("start_date","start_time",
+                  "end_date","end_time",
+                  "start_frequency","end_frequency",
+                 "flare_location","flare_region",
+                  "flare_classification",
+                  "cme_date","cme_time","cme_angle","cme_width","cme_speed"),sep= whitespace ) %>%
+        
+  
+  ## creating new cols halo and width_limit that take logical values true or false
+  
+        mutate(Halo = ifelse(cme_angle == "Halo",TRUE,FALSE)) %>%
+        mutate(cme_width_limit = ifelse(grepl(">",cme_width),TRUE,FALSE)) %>%
+
+  ##uniting the times and dates 
+  
+        unite(start_datetime,c(start_date,start_time),sep = " ", remove = FALSE) %>%
+        unite(end_datetime,c(start_date,end_time),sep = " ",remove = FALSE) %>%
+        
+  ## I united startdate and cme_time becuase cme_time didn't have the right format for posixct conversion
+        unite(cme_datetime,c(start_date,cme_time),sep = " ", remove = FALSE) %>%
+        subset(select = -c(start_date, start_time,end_date,end_time,cme_date,cme_time))
+        
+
+
+## getting rid of non numerics in width and setting any Halo values in cme_angle to NA
+##grepped to find where there was an NA united with start date as I noticed in the data 
+##that there was no cases where cme_date != NA while cme_time == NA
+##can safely assume that cme_datetime can be NA if it has NA anywhere in the column
+## I also convert every chr NA value to the actual NA value 
+
+        solar_flare$cme_datetime[grepl("NA",solar_flare$cme_datetime) == TRUE] <- NA
+        solar_flare[solar_flare == "NA"] <- NA 
+        solar_flare$cme_width <- ifelse(grepl(">",solar_flare$cme_width),
+                                 substring(solar_flare$cme_width,2),solar_flare$cme_width)
+        solar_flare$cme_angle[solar_flare$cme_angle == "Halo"] <- NA
+        
+## converting types 
+        
+        solar_flare$cme_datetime <- as.POSIXct(solar_flare$cme_datetime)
+        solar_flare$start_datetime <- as.POSIXct(solar_flare$start_datetime)
+        solar_flare$end_datetime <- as.POSIXct(solar_flare$end_datetime)
+        solar_flare$cme_datetime <- as.POSIXct(solar_flare$cme_datetime)
+        solar_flare$start_frequency <- as.integer(solar_flare$start_frequency)
+        solar_flare$end_frequency <- as.integer(solar_flare$end_frequency)
+        solar_flare$cme_angle <- as.integer(solar_flare$cme_angle)
+        solar_flare$cme_speed <- as.integer(solar_flare$cme_speed)
+        solar_flare$cme_width <- as.integer(solar_flare$cme_width)
+        
+        
+        
+       
+solar_flare
+
+```
+
+
+
+```{r replication}
+library(gtools)
+
+replication <- solar_flare[mixedorder(solar_flare$flare_classification, decreasing = TRUE),] %>%
+  filter(!is.na(flare_classification)) %>%
+  slice(1:50)
+
+## I was able to replicate most of the data however there seems to be discrepancies
+##between the data given in the https://cdaw.gsfc.nasa.gov/CME_list/radio/waves_type2.html site vs the 
+##https://www.spaceweatherlive.com/en/solar-activity/top-50-solar-flares
+##mainly due to the fact that the data just isn't recorded in the untidy data we had
+##to tidy in my solar_flare method
+## I checked to see if the data was there and it was not so I conclude that the 
+##discrepancy is mainly just from it not being recorded.
+
+replication
+
+```
+
+``` {r flare_similarity}
+    library(lubridate)
+    library(tidyverse)
+    library(sqldf)
+
+
+#used hcorrada github similarity functions as a starting off point 
+
+#function to determine how similar start date is 
+# i give points based on year,month, and day
+
+startyear_similarity <- function(d1,d2) {
+  ifelse(year(d1) == year(d2),2.5,0)
+}
+
+startmonth_similarity <- function(d1,d2) {
+  ifelse(month(d1) == month(d2),2.5,0)
+}
+
+startday_similarity <- function(d1,d2) {
+  ifelse(day(d1)==day(d2),2.5,0)
+}
+
+#function to determine region similiarity
+region_similarity <- function(v1,v2) {
+  ifelse((v1+ 10000) == v2,2.5,0)
+  
+}
+
+
+#function to determine if flare_classification is the same
+class_similarity <-function(v1,v2) {
+  v1str = substr(v1,1,1)
+  v2str = substr(v2,1,1)
+  ifelse(v1str == v2str,2.5,0)
+}
+
+#function that puts all the functions together and finds the similarity percentage
+similarity_between <-function(v1,v2) {
+  
+  
+  sum <- 
+    startyear_similarity(tidy_space_data$start_datetime[v1],solar_flare$start_datetime[v2])
+  sum <- sum + 
+      startmonth_similarity(tidy_space_data$start_datetime[v1],solar_flare$start_datetime[v2])
+  sum <- sum +
+      startday_similarity(tidy_space_data$start_datetime[v1],solar_flare$start_datetime[v2])
+  sum <- sum +
+      region_similarity(tidy_space_data$flare_region[v1],solar_flare$flare_region[v2])
+  sum <- sum + 
+    class_similarity(tidy_space_data$flare_classification[v1],solar_flare$flare_classification[v2])
+  
+  sim <- (sum/15) * 100
+  return(sim)
+}
+
+#flare match function
+flare_match <-function(df1,df2){
+sim_matrix <- matrix(NA,nrow(df1),nrow(df2))
+
+#finding the similarities between every combination
+
+  for(i in seq(1,nrow(df1))) {
+    for(j in seq(1,nrow(df2))){
+      s <- similarity_between(i,j)
+      ifelse(s == 0,sim_matrix[i,j] <- NA,sim_matrix[i,j] <- s)
+    }
+  }
+
+# creating the sim_matrix as a data frame
+sim_df <- sim_matrix %>%
+  magrittr::set_colnames(seq(1,ncol(.))) %>%
+  as_data_frame() %>%
+  rowid_to_column("rank") %>%
+  tidyr::gather(solar_flares, similarity, -rank) %>%
+  mutate(solar_flares = as.integer(solar_flares)) %>%
+
+#matching the row which has the highest similarity from top 50 to solar_flare %>%
+    group_by(rank) %>%
+    summarize(max_sim = max(similarity),index = solar_flares[which.max(similarity)]) 
+   
+
+#adding the index to the tidy top 50 data
+# i use sql because I feel the natural join is the easiest way to join the tables
+#I can then just subset the desired cols the matched col is named index as per the proj description
+
+matched_tidy_space_data <- sqldf("select * from tidy_space_data 
+                                  natural join 
+                                 sim_df") %>%
+  subset(select= -max_sim)
+}
+
+#exmaple for my similarity function
+sim <- similarity_between(1,243)
+
+#example for my flare_match function
+matched_df_final <- flare_match(tidy_space_data,solar_flare)
+
+##sim function DEFINITION
+#given indexes you can compute similarities between the entities at those positions
+#ex row 1 of the top 50 table is compared to row 243 in the nasa table. It uses start date, region, and 
+#classification
+#to determine the percentage of similarity between the two entities.
+#from there the flare match iterates over both tables to calculate every single similarity 
+#it then groups by rank (top 50) and finds the most similar (largest) match and gets that index
+#SO the top 50 table now has the index of its best match on the NASA table.
+# again the nasa data table really isnt accurate for example if u look at the first
+#entry in the top 5 table it gives the starttime of 19:29 that same entry is located
+# at row 243 in the nasa data table but the start time is rounded to 20:00
+#this data is not accurate so i guess just getting a high percentage is enough
+
+
+```
+```{r plotting}
+
+## plotting the solar flare data from NASA 
+#end me. Pls.
+solar_flare %>%
+    ggplot(mapping =aes(y=cme_width,x=start_datetime)) + geom_point()
+
+
+```
+

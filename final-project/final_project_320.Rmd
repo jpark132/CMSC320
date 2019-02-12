@@ -1,0 +1,29 @@
+---
+title: "Final_project"
+author: "Joon"
+date: "May 16, 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r obtaining data }
+library(stringr)
+library(tidyverse)
+crypto_data <- read_csv("crypto-markets.csv")
+```
+
+```{r tidying data}
+library(tidyverse)
+bitcoin_data <- crypto_data %>% 
+                  filter(name == 'Bitcoin') %>%
+                  select(name,open,close,high,low,date)
+
+```
+```{r some data transformations}
+updated_btc_data <- bitcoin_data %>%
+                    mutate(diff = )
+```
+#create a column for differences and plot 
